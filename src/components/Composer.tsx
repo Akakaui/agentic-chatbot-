@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   ArrowUp,
   Paperclip,
-  Sparkles,
   Mic,
   X,
   FileText,
@@ -11,7 +10,7 @@ import {
   HelpCircle
 } from 'lucide-react';
 import { SlashCommandPalette } from './SlashCommandPalette';
-import { SkillDefinition, AgentDefinition, RemoteMcpConnector, ProjectSource } from '../types';
+import { SkillDefinition, AgentDefinition, RemoteMcpConnector, ProjectSource, AgentMode } from '../types';
 
 interface ComposerProps {
   onSendMessage: (content: string, attachments?: File[]) => void;
@@ -21,6 +20,8 @@ interface ComposerProps {
   agents: AgentDefinition[];
   connectors: RemoteMcpConnector[];
   projectSources?: ProjectSource[];
+  mode: AgentMode;
+  onModeChange: (mode: AgentMode) => void;
 }
 
 export function Composer({
@@ -30,7 +31,9 @@ export function Composer({
   skills,
   agents,
   connectors,
-  projectSources
+  projectSources,
+  mode,
+  onModeChange
 }: ComposerProps) {
   const [text, setText] = useState('');
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
@@ -110,14 +113,14 @@ export function Composer({
   };
 
   const quickPrompts = [
-    { label: 'Competitor Research', prompt: '/research Compare Muuto and HAY circular warranties' },
-    { label: 'Architecture Diagram', prompt: '/diagram Create multi-rail payment fallback flowchart' },
-    { label: 'Interactive Preview', prompt: '/preview Build an interactive margin calculator UI component' },
-    { label: 'QA Verification', prompt: '/qa Audit Scandinavian positioning brief citations' }
+    { label: 'Research a topic', prompt: 'Research a topic and cite the most useful sources.' },
+    { label: 'Draft a document', prompt: 'Draft a clear document from my instructions.' },
+    { label: 'Create a diagram', prompt: '/diagram Create a simple process diagram.' },
+    { label: 'Analyze a file', prompt: 'Analyze the file I attach and summarize the key decisions.' }
   ];
 
   return (
-    <div id="composer-container" className="relative p-3 md:p-4 bg-transparent max-w-4xl mx-auto w-full">
+    <div id="composer-container" className="relative p-3 md:p-4 bg-transparent max-w-3xl mx-auto w-full">
       {/* Floating Slash Command Palette */}
       <SlashCommandPalette
         isOpen={showSlashPalette}
@@ -130,7 +133,7 @@ export function Composer({
       />
 
       {/* Main Composer Box */}
-      <div className="relative bg-white border border-stone-300 rounded-2xl shadow-md focus-within:border-stone-900 focus-within:ring-2 focus-within:ring-stone-900/10 transition-all p-3 space-y-2">
+      <div className="relative rounded-2xl border border-white/12 bg-[#1b1a18] p-3.5 shadow-[0_18px_60px_rgba(0,0,0,.34)] transition-all focus-within:border-orange-400/60 focus-within:ring-4 focus-within:ring-orange-400/10 space-y-2">
         {/* Attachment Previews */}
         {attachedFiles.length > 0 && (
           <div className="flex flex-wrap gap-2 pt-1 pb-2 border-b border-stone-100">
@@ -160,10 +163,10 @@ export function Composer({
           value={text}
           onChange={handleTextChange}
           onKeyDown={handleKeyDown}
-          placeholder="Ask Lattice or type '/' for skills, subagents, diagrams, and tools..."
+          placeholder="Message your assistant or type '/' for skills, agents, tools, and connectors..."
           rows={1}
           disabled={isRunning}
-          className="w-full bg-transparent text-sm text-stone-900 placeholder:text-stone-400 focus:outline-none resize-none min-h-[44px] max-h-[200px] leading-relaxed"
+          className="w-full bg-transparent text-[14px] leading-6 text-stone-100 placeholder:text-stone-500 focus:outline-none resize-none min-h-[56px] max-h-[220px]"
         />
 
         {/* Bottom Bar: Action Buttons & Run Controls */}
@@ -181,7 +184,7 @@ export function Composer({
               id="attach-file-btn"
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="p-1.5 rounded-lg text-stone-500 hover:text-stone-800 hover:bg-stone-100 transition-colors"
+              className="p-2 rounded-lg text-stone-500 hover:text-stone-100 hover:bg-white/[0.08] transition-colors"
               title="Attach files (PDF, Markdown, Specs, Images)"
             >
               <Paperclip size={16} />
@@ -195,11 +198,10 @@ export function Composer({
                 setShowSlashPalette(!showSlashPalette);
                 setSlashQuery('');
               }}
-              className="flex items-center gap-1 px-2 py-1 rounded-lg text-stone-600 hover:text-stone-900 hover:bg-stone-100 transition-colors font-mono text-xs"
+              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-stone-500 hover:text-stone-100 hover:bg-white/[0.08] transition-colors font-mono text-xs"
               title="Browse / commands"
             >
-              <Sparkles size={14} className="text-orange-700" />
-              <span>/</span>
+              <span className="font-semibold">/</span>
             </button>
 
             {/* Simulated Voice Input */}
@@ -208,7 +210,7 @@ export function Composer({
               type="button"
               onClick={() => setIsRecording(!isRecording)}
               className={`p-1.5 rounded-lg transition-colors ${
-                isRecording ? 'bg-red-100 text-red-700 animate-pulse' : 'text-stone-500 hover:text-stone-800 hover:bg-stone-100'
+                isRecording ? 'bg-red-400/15 text-red-300 animate-pulse' : 'text-stone-500 hover:text-stone-100 hover:bg-white/[0.08]'
               }`}
               title={isRecording ? 'Listening...' : 'Voice Dictation'}
             >
@@ -217,8 +219,12 @@ export function Composer({
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-[11px] text-stone-400 hidden sm:inline font-mono">
-              Press Enter to send
+            <label className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1.5 text-[10px] text-stone-400" title="Choose whether the primary agent should only draft a plan or execute safe actions">
+              <span className={mode === 'plan' ? 'text-orange-300' : 'text-emerald-300'}>{mode === 'plan' ? 'Plan' : 'Act'}</span>
+              <select value={mode} onChange={(event) => onModeChange(event.target.value as AgentMode)} className="bg-transparent text-[10px] text-stone-300 outline-none"><option value="act">Act</option><option value="plan">Plan</option></select>
+            </label>
+            <span className="text-[11px] text-stone-600 hidden sm:inline">
+              Enter to send · Shift + Enter for a new line
             </span>
 
             {isRunning ? (
@@ -235,7 +241,7 @@ export function Composer({
                 id="send-message-btn"
                 onClick={handleSubmit}
                 disabled={!text.trim() && attachedFiles.length === 0}
-                className="flex items-center justify-center w-8 h-8 rounded-xl bg-stone-900 hover:bg-orange-700 disabled:opacity-30 disabled:hover:bg-stone-900 text-white transition-colors shadow-xs"
+                className="flex items-center justify-center w-9 h-9 rounded-xl bg-orange-400 hover:bg-orange-300 disabled:opacity-25 disabled:hover:bg-orange-400 text-[#20110b] transition-colors shadow-sm"
                 title="Send Prompt"
               >
                 <ArrowUp size={16} />
@@ -252,7 +258,7 @@ export function Composer({
             <button
               key={i}
               onClick={() => setText(item.prompt)}
-              className="text-[11px] font-medium text-stone-600 bg-white/70 hover:bg-white border border-stone-200/80 hover:border-stone-300 rounded-full px-3 py-1 transition-colors shadow-2xs"
+              className="text-[11px] font-medium text-stone-400 bg-white/[0.025] hover:bg-white/[0.07] border border-white/10 hover:border-white/20 rounded-full px-3 py-1.5 transition-colors"
             >
               {item.label}
             </button>

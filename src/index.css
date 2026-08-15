@@ -1,1 +1,136 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
 @import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+  --canvas: #121212;
+  --surface: #181818;
+  --surface-2: #202020;
+  --surface-3: #272727;
+  --line: rgba(255,255,255,.085);
+  --line-strong: rgba(255,255,255,.14);
+  --ink: #f3f0e8;
+  --muted: #99958d;
+  --quiet: #6d6a64;
+  --accent: #d97745;
+  --accent-soft: rgba(217,119,69,.14);
+  --success: #6dc49a;
+  --danger: #f07c70;
+  --shadow: 0 24px 80px rgba(0,0,0,.28);
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { width: 100%; height: 100%; margin: 0; }
+body { background: var(--canvas); color: var(--ink); overflow: hidden; }
+button, input, textarea, select { font: inherit; }
+button { -webkit-tap-highlight-color: transparent; }
+
+#lattice-app-root {
+  background: var(--canvas) !important;
+  color: var(--ink) !important;
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+}
+#lattice-app-root * { border-color: var(--line); }
+#lattice-app-root .bg-stone-100,
+#lattice-app-root .bg-stone-50,
+#lattice-app-root .bg-white { background-color: var(--surface) !important; }
+#lattice-app-root .bg-stone-200 { background-color: var(--surface-3) !important; }
+#lattice-app-root .bg-stone-900 { background-color: #0d0d0d !important; }
+#lattice-app-root .text-stone-950,
+#lattice-app-root .text-stone-900,
+#lattice-app-root .text-stone-800 { color: var(--ink) !important; }
+#lattice-app-root .text-stone-700,
+#lattice-app-root .text-stone-600 { color: #c2bdb4 !important; }
+#lattice-app-root .text-stone-500,
+#lattice-app-root .text-stone-400 { color: var(--muted) !important; }
+#lattice-app-root .text-stone-300 { color: var(--quiet) !important; }
+#lattice-app-root .border-stone-200,
+#lattice-app-root .border-stone-100 { border-color: var(--line) !important; }
+#lattice-app-root .shadow-sm,
+#lattice-app-root .shadow-lg,
+#lattice-app-root .shadow-2xl { box-shadow: var(--shadow) !important; }
+#lattice-app-root .bg-orange-50 { background-color: var(--accent-soft) !important; }
+#lattice-app-root .text-orange-700,
+#lattice-app-root .text-orange-600,
+#lattice-app-root .text-orange-950 { color: var(--accent) !important; }
+#lattice-app-root .bg-emerald-50 { background-color: rgba(109,196,154,.12) !important; }
+#lattice-app-root .text-emerald-700 { color: var(--success) !important; }
+#lattice-app-root input,
+#lattice-app-root textarea,
+#lattice-app-root select { color: var(--ink) !important; background-color: rgba(255,255,255,.035) !important; }
+#lattice-app-root input::placeholder,
+#lattice-app-root textarea::placeholder { color: var(--quiet) !important; }
+#lattice-app-root button { transition: background-color .18s ease, border-color .18s ease, color .18s ease, transform .18s ease, box-shadow .18s ease; }
+#lattice-app-root button:active { transform: scale(.985); }
+#lattice-app-root button:hover { border-color: var(--line-strong); }
+
+#app-header { background: rgba(18,18,18,.78) !important; border-bottom-color: var(--line) !important; backdrop-filter: blur(22px); }
+#app-header button { background-color: rgba(255,255,255,.035) !important; color: var(--muted) !important; border-color: var(--line) !important; }
+#app-header button:hover { background-color: var(--surface-3) !important; color: var(--ink) !important; }
+#app-header .bg-orange-50 { color: var(--accent) !important; }
+
+/* Navigation rail */
+#lattice-app-root aside { background: #0e0e0e !important; border-color: var(--line) !important; }
+#lattice-app-root aside button { color: var(--muted) !important; }
+#lattice-app-root aside button:hover { background: rgba(255,255,255,.05) !important; color: var(--ink) !important; }
+#lattice-app-root aside .bg-stone-900,
+#lattice-app-root aside .bg-orange-50 { background: var(--accent-soft) !important; color: var(--ink) !important; }
+#lattice-app-root aside .text-orange-700 { color: var(--accent) !important; }
+
+/* Main workspace */
+#lattice-app-root main { background: var(--canvas) !important; }
+#lattice-app-root main > div { background: transparent !important; }
+#lattice-app-root .rounded-xl,
+#lattice-app-root .rounded-2xl,
+#lattice-app-root .rounded-3xl { border-radius: 14px; }
+#lattice-app-root .rounded-full { border-radius: 999px; }
+
+/* Message and status cards */
+#lattice-app-root [class*="completion"],
+#lattice-app-root [class*="tool_progress"],
+#lattice-app-root [class*="approval"] { background: var(--surface) !important; }
+#lattice-app-root pre { background: #0b0b0b !important; border: 1px solid var(--line); color: #d9d2c8 !important; }
+#lattice-app-root code { font-family: 'DM Mono', ui-monospace, monospace; }
+
+/* Composer */
+#lattice-app-root textarea { border-color: var(--line-strong) !important; background: rgba(255,255,255,.045) !important; box-shadow: 0 10px 40px rgba(0,0,0,.2); }
+#lattice-app-root textarea:focus { border-color: rgba(243,107,58,.6) !important; box-shadow: 0 0 0 3px rgba(243,107,58,.12), 0 16px 50px rgba(0,0,0,.32); }
+#lattice-app-root #send-message-btn { background: var(--accent) !important; color: #1a0d08 !important; border-color: var(--accent) !important; }
+#lattice-app-root #send-message-btn:hover { background: #e79569 !important; }
+
+/* Artifact canvas */
+#lattice-app-root [class*="artifact"] { scrollbar-color: var(--surface-3) transparent; }
+#lattice-app-root .artifact-canvas,
+#lattice-app-root [data-artifact-canvas="true"] { background: #171717 !important; }
+
+/* Premium type accents */
+#lattice-app-root h1,
+#lattice-app-root h2,
+#lattice-app-root h3,
+#lattice-app-root h4 { font-family: 'Fraunces', Georgia, serif; font-weight: 500; letter-spacing: -.035em; }
+#lattice-app-root .font-mono { font-family: 'DM Mono', ui-monospace, monospace !important; }
+
+/* Scrollbars */
+* { scrollbar-width: thin; scrollbar-color: #353535 transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: #353535; border: 2px solid transparent; background-clip: padding-box; border-radius: 999px; }
+
+@media (max-width: 1023px) {
+  #lattice-app-root .hidden-tablet { display: none; }
+}
+@media (max-width: 767px) {
+  body { overflow: auto; }
+  #lattice-app-root { min-height: 100dvh; height: 100dvh; }
+  #app-header { padding-left: 12px !important; padding-right: 12px !important; }
+  #lattice-app-root .text-3xl { font-size: 1.6rem; }
+  #lattice-app-root .text-2xl { font-size: 1.3rem; }
+  #lattice-app-root .rounded-2xl { border-radius: 16px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
+}

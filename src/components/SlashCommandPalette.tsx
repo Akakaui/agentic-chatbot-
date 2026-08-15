@@ -57,9 +57,9 @@ export function SlashCommandPalette({
       title: s.name,
       category: 'Skills & Workflows' as const,
       description: s.description,
-      risk: s.risk,
-      permissions: s.requiredCapabilities,
-      outputFormat: s.outputFormat,
+      risk: (s.risk === 'high' || s.risk === 'medium' ? s.risk : 'low') as 'low' | 'medium' | 'high',
+      permissions: s.requiredCapabilities || [],
+      outputFormat: s.outputFormat || 'Structured output',
       icon: Sparkles
     })),
     // Built-in actions
@@ -99,12 +99,12 @@ export function SlashCommandPalette({
     // Connectors
     ...connectors.map((c) => ({
       id: c.id,
-      command: `/${c.displayName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
-      title: `Invoke ${c.displayName}`,
+      command: `/${(c.displayName || c.name || 'connector').toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+      title: `Invoke ${c.displayName || c.name || 'connector'}`,
       category: 'Connectors (MCP)' as const,
-      description: c.description,
+      description: c.description || 'Invoke a connected remote tool.',
       risk: 'medium' as const,
-      permissions: c.scopes,
+      permissions: c.scopes || [],
       outputFormat: 'Remote MCP Output',
       icon: Radio
     }))

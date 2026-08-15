@@ -1,9 +1,9 @@
 import React, { useState, useEffect, FormEvent } from 'react';
 import { NavigationRail, NavView } from './components/NavigationRail';
+import { Trash2 } from 'lucide-react';
 import { Header } from './components/Header';
 import { ConversationView } from './components/ConversationView';
 import { Composer } from './components/Composer';
-import { ArtifactCanvas } from './components/ArtifactCanvas';
 import { ProjectOverview } from './components/ProjectOverview';
 import { SourceManager } from './components/SourceManager';
 import { ConnectorRegistry } from './components/ConnectorRegistry';
@@ -23,6 +23,7 @@ import {
   Artifact,
   ProjectSource,
   AgentDefinition,
+  AgentMode,
   SkillDefinition,
   RemoteMcpConnector,
   ScheduledTask,
@@ -51,10 +52,8 @@ export default function App() {
 
   // UI state
   const [currentView, setCurrentView] = useState<NavView>('chat');
-  const [activeProjectId, setActiveProjectId] = useState<string | undefined>(projects[0]?.id);
-  const [activeConversationId, setActiveConversationId] = useState<string | undefined>(conversations[0]?.id);
-  const [activeArtifactId, setActiveArtifactId] = useState<string | undefined>(artifacts[0]?.id);
-  const [isArtifactPanelOpen, setIsArtifactPanelOpen] = useState(true);
+  const [activeProjectId, setActiveProjectId] = useState<string | undefined>(undefined);
+  const [activeConversationId, setActiveConversationId] = useState<string | undefined>(undefined);
   const [isNavCollapsed, setIsNavCollapsed] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -65,7 +64,9 @@ export default function App() {
   // Active run state
   const [isRunning, setIsRunning] = useState(false);
   const [selectedAgentId, setSelectedAgentId] = useState<string>('agent_main_default');
-  const [activeMemoryMode, setActiveMemoryMode] = useState<MemoryMode>('project_only');
+  const [activeMemoryMode, setActiveMemoryMode] = useState<MemoryMode>('global');
+  const [agentMode, setAgentMode] = useState<AgentMode>('act');
+  const [pendingQuestionPrompt, setPendingQuestionPrompt] = useState<string | null>(null);
 
   // New Project modal state
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
@@ -93,7 +94,6 @@ export default function App() {
 
   const activeProject = projects.find((p) => p.id === activeProjectId);
   const activeConversation = conversations.find((c) => c.id === activeConversationId);
-  const activeArtifact = artifacts.find((a) => a.id === activeArtifactId) || artifacts[0];
   const messages = latticeStore.getMessages(activeConversationId);
   const currentProjectSources = activeProjectId ? sources.filter((s) => s.projectId === activeProjectId) : [];
 
@@ -176,12 +176,20 @@ export default function App() {
         currentConvId,
         activeProjectId,
         activeMemoryMode,
+        agentMode,
         {
           onPlanCreated: (plan) => {
             latticeStore.updateMessage(assistantMsgId, {
               turnType: 'plan',
               plan,
               content: 'Execution plan formulated. Delegating to specialist subagents...'
+            });
+          },
+          onActivity: (event) => {
+            const current = latticeStore.getMessages(currentConvId).find((m) => m.id === assistantMsgId);
+            latticeStore.updateMessage(assistantMsgId, {
+              turnType: event.type === 'thought' ? 'plan' : 'tool_progress',
+              activity: [...(current?.activity || []), event]
             });
           },
           onSubagentProgress: (task) => {
@@ -211,13 +219,21 @@ export default function App() {
             latticeStore.updateMessage(assistantMsgId, {
               turnType: 'blocked_run',
               continuationPacket,
-              content: 'Run paused: A required asset or generator is currently unavailable.'
+              content: 'Run paused because a required capability or asset is unavailable.'
+            });
+            setIsRunning(false);
+          },
+          onQuestionRequired: (questionOrQuestions) => {
+            setPendingQuestionPrompt(content);
+            const questions = Array.isArray(questionOrQuestions) ? questionOrQuestions : [questionOrQuestions];
+            latticeStore.updateMessage(assistantMsgId, {
+              turnType: 'question_required',
+              questions,
+              content: questions.length > 1 ? 'I need a couple of decisions before I continue.' : 'I need one decision before I continue.'
             });
             setIsRunning(false);
           },
           onArtifactCreated: (artifact) => {
-            setActiveArtifactId(artifact.id);
-            setIsArtifactPanelOpen(true);
             const current = latticeStore.getMessages(currentConvId).find((m) => m.id === assistantMsgId);
             const currentArtIds = current?.artifactIds || [];
             latticeStore.updateMessage(assistantMsgId, {
@@ -225,11 +241,13 @@ export default function App() {
             });
           },
           onComplete: (summary, citations, artifactIds) => {
+            const current = latticeStore.getMessages(currentConvId).find((message) => message.id === assistantMsgId);
             latticeStore.updateMessage(assistantMsgId, {
               turnType: 'completion_summary',
               content: summary,
               citations,
-              artifactIds
+              artifactIds,
+              plan: current?.plan ? { ...current.plan, steps: current.plan.steps.map((step) => ({ ...step, status: 'completed' })) } : current?.plan
             });
             setIsRunning(false);
           }
@@ -270,8 +288,33 @@ export default function App() {
   };
 
   const handleResumeBlockedRun = (reqId: string) => {
-    alert(`Continuation packet ${reqId} received asset. Resuming Phase 3 subagent synthesis...`);
-    handleSendMessage('Resume Phase 3 synthesis with provided hero asset.');
+    handleSendMessage(`Continue the paused task using the supplied continuation packet ${reqId}.`);
+  };
+
+  const handleAnswerQuestion = (messageId: string, answer: string | string[] | Record<string, string | string[]>) => {
+    const currentMsgs = latticeStore.getMessages(activeConversationId);
+    const target = currentMsgs.find((message) => message.id === messageId);
+    if (!target?.question) return;
+    const answeredAt = new Date().toISOString();
+    const answerMap = typeof answer === 'object' && !Array.isArray(answer) ? answer : { [target.question.id]: answer };
+    const readableAnswer = Object.entries(answerMap).map(([id, value]) => `${id}: ${Array.isArray(value) ? value.join(', ') : value}`).join(' · ');
+    const updatedQuestions = (target.questions || [target.question]).map((question) => ({
+      ...question,
+      ...(answerMap[question.id] !== undefined ? { status: 'answered' as const, answer: answerMap[question.id], answeredAt } : {})
+    }));
+    latticeStore.updateMessage(messageId, {
+      turnType: 'question_answered',
+      question: updatedQuestions[0],
+      questions: updatedQuestions,
+      content: `${target.content}\n\nDecisions recorded: ${readableAnswer}`
+    });
+    const continuationPrompt = pendingQuestionPrompt;
+    setPendingQuestionPrompt(null);
+    if (continuationPrompt) {
+      window.setTimeout(() => handleSendMessage(`${continuationPrompt}\n\nUser decisions: ${readableAnswer}`), 0);
+    } else {
+      setIsRunning(false);
+    }
   };
 
   // Handle Project Creation
@@ -403,8 +446,6 @@ export default function App() {
           onSelectAgent={setSelectedAgentId}
           memoryMode={activeMemoryMode}
           onChangeMemoryMode={setActiveMemoryMode}
-          isArtifactPanelOpen={isArtifactPanelOpen}
-          onToggleArtifactPanel={() => setIsArtifactPanelOpen(!isArtifactPanelOpen)}
           onOpenMobileNav={() => setIsMobileNavOpen(true)}
           onOpenSearch={() => setIsSearchOpen(true)}
         />
@@ -417,14 +458,25 @@ export default function App() {
               <div className="flex-1 flex flex-col h-full overflow-hidden">
                 <ConversationView
                   messages={messages}
+                  artifacts={artifacts}
                   isRunning={isRunning}
-                  onOpenArtifact={(artId) => {
-                    setActiveArtifactId(artId);
-                    setIsArtifactPanelOpen(true);
+                  onPromptRevision={(prompt, art) => handleSendMessage(`Revise artifact "${art.title}": ${prompt}`)}
+                  onSaveVersion={(artId, newContent, changeSummary) => {
+                    const art = artifacts.find((item) => item.id === artId);
+                    if (art) {
+                      const nextVersion = art.currentVersion + 1;
+                      latticeStore.saveArtifact({ ...art, currentVersion: nextVersion, updatedAt: new Date().toISOString(), versions: [...art.versions, { version: nextVersion, content: newContent, changeSummary, createdAt: new Date().toISOString() }] });
+                    }
+                  }}
+                  onSaveToProjectSources={(art) => {
+                    const latest = art.versions[art.versions.length - 1];
+                    if (!latest) return;
+                    latticeStore.addSource({ id: 'src_' + Math.random().toString(36).substring(2, 9), name: `${art.title.replace(/\s+/g, '_')}.md`, projectId: activeProjectId, type: 'markdown', sizeBytes: latest.content.length, checksum: 'sha256:' + Math.random().toString(36).substring(2, 10), extractionQuality: 'high', extractedText: latest.content, tokenCount: Math.round(latest.content.length / 4), uploadedAt: new Date().toISOString(), visibility: 'project_members' });
                   }}
                   onApproveTool={handleApproveTool}
                   onRejectTool={handleRejectTool}
                   onResumeBlockedRun={handleResumeBlockedRun}
+                  onAnswerQuestion={handleAnswerQuestion}
                   onInspectSubagent={(task) => setInspectedSubagentTask(task)}
                 />
                 <Composer
@@ -435,6 +487,8 @@ export default function App() {
                   agents={agents}
                   connectors={connectors}
                   projectSources={currentProjectSources}
+                  mode={agentMode}
+                  onModeChange={setAgentMode}
                 />
               </div>
             )}
@@ -454,10 +508,7 @@ export default function App() {
                   setActiveConversationId(cId);
                   setCurrentView('chat');
                 }}
-                onOpenArtifact={(artId) => {
-                  setActiveArtifactId(artId);
-                  setIsArtifactPanelOpen(true);
-                }}
+                onOpenArtifact={() => setCurrentView('artifacts')}
                 onUploadSource={() => setCurrentView('sources')}
                 onNewChatInProject={handleNewConversation}
               />
@@ -473,20 +524,20 @@ export default function App() {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                   {artifacts.map((art) => (
-                    <div
+                      <div
                       key={art.id}
-                      onClick={() => {
-                        setActiveArtifactId(art.id);
-                        setIsArtifactPanelOpen(true);
-                      }}
+                      onClick={() => setCurrentView('artifacts')}
                       className="bg-white border border-stone-200 rounded-2xl p-5 shadow-xs space-y-3 cursor-pointer hover:border-orange-300 transition-colors flex flex-col justify-between"
                     >
-                      <div className="space-y-1.5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-1.5 min-w-0">
                         <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-orange-50 text-orange-800 font-semibold uppercase">
                           {art.type.replace('_', ' ')}
                         </span>
                         <h4 className="font-bold text-xs text-stone-900 truncate">{art.title}</h4>
                         <p className="text-[11px] text-stone-500 line-clamp-2">{art.description}</p>
+                        </div>
+                        <button type="button" onClick={(event) => { event.stopPropagation(); latticeStore.deleteArtifact(art.id); }} className="shrink-0 text-stone-400 hover:text-red-500" title="Delete artifact"><Trash2 size={15} /></button>
                       </div>
                       <div className="pt-2 border-t border-stone-100 flex items-center justify-between text-[10px] font-mono text-stone-400">
                         <span>v{art.currentVersion} ({art.versions.length} edits)</span>
@@ -535,6 +586,12 @@ export default function App() {
                 <AgentDirectory
                   agents={agents}
                   onSaveAgent={(ag) => latticeStore.saveAgent(ag)}
+                  onDeleteAgent={(agentId) => latticeStore.deleteAgent(agentId)}
+                />
+                <SkillDirectory
+                  skills={skills}
+                  onSaveSkill={(skill) => latticeStore.saveSkill(skill)}
+                  onDeleteSkill={(skillId) => latticeStore.deleteSkill(skillId)}
                 />
               </div>
             )}
@@ -548,6 +605,7 @@ export default function App() {
                   const sch = schedules.find((s) => s.id === schId);
                   if (sch) handleSendMessage(sch.prompt);
                 }}
+                onDeleteSchedule={(scheduleId) => latticeStore.deleteSchedule(scheduleId)}
               />
             )}
 
@@ -564,59 +622,7 @@ export default function App() {
             )}
           </div>
 
-          {/* 3. Right Contextual Artifact Canvas Panel - Responsive for Mobile vs Tablet/Desktop */}
-          {isArtifactPanelOpen && activeArtifact && (
-            <div
-              id="artifact-canvas-wrapper"
-              className="fixed inset-0 z-40 md:static md:z-auto w-full md:w-[380px] lg:w-[460px] xl:w-[540px] h-full shrink-0 bg-white"
-            >
-              <ArtifactCanvas
-                artifact={activeArtifact}
-                onClose={() => setIsArtifactPanelOpen(false)}
-                onSaveVersion={(artId, newContent, changeSummary) => {
-                  const art = artifacts.find((a) => a.id === artId);
-                  if (art) {
-                    const newVer = art.currentVersion + 1;
-                    const updated: Artifact = {
-                      ...art,
-                      currentVersion: newVer,
-                      updatedAt: new Date().toISOString(),
-                      versions: [
-                        ...art.versions,
-                        {
-                          version: newVer,
-                          content: newContent,
-                          changeSummary,
-                          createdAt: new Date().toISOString()
-                        }
-                      ]
-                    };
-                    latticeStore.saveArtifact(updated);
-                  }
-                }}
-                onPromptRevision={(prompt, art) => {
-                  handleSendMessage(`Revise artifact "${art.title}": ${prompt}`);
-                }}
-                onSaveToProjectSources={(art) => {
-                  const newSrc: ProjectSource = {
-                    id: 'src_' + Math.random().toString(36).substring(2, 9),
-                    name: `${art.title.replace(/\s+/g, '_')}.md`,
-                    projectId: activeProjectId,
-                    type: 'markdown',
-                    sizeBytes: art.versions[art.versions.length - 1].content.length,
-                    checksum: 'sha256:' + Math.random().toString(36).substring(2, 10),
-                    extractionQuality: 'high',
-                    extractedText: art.versions[art.versions.length - 1].content,
-                    tokenCount: Math.round(art.versions[art.versions.length - 1].content.length / 4),
-                    uploadedAt: new Date().toISOString(),
-                    visibility: 'project_members'
-                  };
-                  latticeStore.addSource(newSrc);
-                  alert(`Artifact "${art.title}" indexed as Project Knowledge Source.`);
-                }}
-              />
-            </div>
-          )}
+
         </main>
 
         {/* 4. Dedicated Mobile Bottom Tab Bar (Phone Experience) */}
@@ -657,8 +663,7 @@ export default function App() {
                   <button
                     key={a.id}
                     onClick={() => {
-                      setActiveArtifactId(a.id);
-                      setIsArtifactPanelOpen(true);
+                      setCurrentView('artifacts');
                       setIsSearchOpen(false);
                     }}
                     className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-stone-100 text-left"
@@ -777,8 +782,7 @@ export default function App() {
               ]
             };
             latticeStore.saveArtifact(promoted);
-            setActiveArtifactId(promoted.id);
-            setIsArtifactPanelOpen(true);
+            setCurrentView('artifacts');
             setInspectedSubagentTask(null);
           }}
         />

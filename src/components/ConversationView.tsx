@@ -11,7 +11,7 @@ import {
   ShieldCheck,
   RotateCw,
   Copy,
-  Sparkles,
+  Paperclip,
   Info,
   ChevronRight,
   ShieldAlert,
@@ -29,25 +29,35 @@ import {
   Citation,
   Artifact
 } from '../types';
+import { AgentActivityStream } from './AgentActivityStream';
+import { InlineArtifactCard } from './InlineArtifactCard';
 
 interface ConversationViewProps {
   messages: Message[];
+  artifacts: Artifact[];
   isRunning: boolean;
-  onOpenArtifact: (artifactId: string) => void;
+  onPromptRevision: (prompt: string, artifact: Artifact) => void;
+  onSaveToProjectSources: (artifact: Artifact) => void;
+  onSaveVersion: (artifactId: string, content: string, summary: string) => void;
   onApproveTool: (approvalId: string) => void;
   onRejectTool: (approvalId: string, reason?: string) => void;
   onResumeBlockedRun: (packetId: string, uploadedFile?: File) => void;
+  onAnswerQuestion?: (messageId: string, answer: string | string[] | Record<string, string | string[]>) => void;
   onInspectSubagent?: (task: SubagentTask) => void;
   onSelectCitation?: (citation: Citation) => void;
 }
 
 export function ConversationView({
   messages,
+  artifacts,
   isRunning,
-  onOpenArtifact,
+  onPromptRevision,
+  onSaveToProjectSources,
+  onSaveVersion,
   onApproveTool,
   onRejectTool,
   onResumeBlockedRun,
+  onAnswerQuestion,
   onInspectSubagent,
   onSelectCitation
 }: ConversationViewProps) {
@@ -63,17 +73,13 @@ export function ConversationView({
   };
 
   return (
-    <div id="conversation-stream" className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 max-w-4xl mx-auto w-full">
+    <div id="conversation-stream" className="flex-1 overflow-y-auto px-4 pb-36 pt-6 md:px-8 md:pb-40 md:pt-10 space-y-8 max-w-3xl mx-auto w-full">
       {messages.length === 0 ? (
-        <div id="conversation-empty-state" className="h-full flex flex-col items-center justify-center text-center p-8 text-stone-500 space-y-4 my-auto">
-          <div className="w-12 h-12 rounded-2xl bg-stone-200/80 flex items-center justify-center text-stone-700">
-            <BrainCircuit size={24} />
-          </div>
-          <div className="space-y-1 max-w-md">
-            <h3 className="text-base font-semibold text-stone-900">Lattice Agentic Workbench</h3>
-            <p className="text-xs text-stone-500 leading-relaxed">
-              Start a standalone goal or select a project. Lattice will formulate a plan, delegate to specialist subagents, and render durable artifacts with grounded citations.
-            </p>
+        <div id="conversation-empty-state" className="h-full flex flex-col items-center justify-center text-center p-8 text-stone-400 space-y-5 my-auto">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full border border-orange-400/50 bg-orange-400/10 text-orange-300 text-lg font-semibold">L</div>
+          <div className="space-y-2 max-w-xl">
+            <h1 className="text-3xl md:text-4xl font-medium tracking-tight text-stone-100">How can I help you today?</h1>
+            <p className="text-sm leading-6 text-stone-500">Ask a question, attach a file, or describe a goal. I will stay direct for simple requests and show useful activity when research, tools, or a durable artifact are needed.</p>
           </div>
         </div>
       ) : (
@@ -83,21 +89,19 @@ export function ConversationView({
             <div
               key={msg.id}
               id={`message-${msg.id}`}
-              className={`flex gap-3 md:gap-4 ${isUser ? 'justify-end' : 'justify-start'}`}
+              className={`flex gap-3 md:gap-5 ${isUser ? 'justify-end' : 'justify-start'}`}
             >
               {/* Assistant Avatar */}
               {!isUser && (
-                <div className="w-8 h-8 rounded-xl bg-stone-900 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
-                  <Bot size={16} />
-                </div>
+                <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-orange-400/40 bg-orange-400/10 text-orange-300 text-[11px] font-semibold">L</div>
               )}
 
               {/* Message Box */}
               <div
-                className={`max-w-2xl w-full rounded-2xl p-4 md:p-5 space-y-4 text-xs md:text-sm leading-relaxed transition-all shadow-xs ${
+                className={`max-w-[680px] w-full space-y-3 text-[13px] md:text-[14px] leading-7 transition-all ${
                   isUser
-                    ? 'bg-stone-900 text-white rounded-tr-xs'
-                    : 'bg-white border border-stone-200 text-stone-900 rounded-tl-xs'
+                    ? 'rounded-2xl bg-[#242321] px-4 py-3 text-stone-100 shadow-sm'
+                    : 'text-stone-200'
                 }`}
               >
                 {/* User Content */}
@@ -111,7 +115,7 @@ export function ConversationView({
                             key={i}
                             className="px-2 py-0.5 bg-stone-800 border border-stone-700 rounded text-[11px] text-stone-300 font-mono"
                           >
-                            📎 {att.name}
+                            <Paperclip size={12} /> {att.name}
                           </span>
                         ))}
                       </div>
@@ -122,41 +126,48 @@ export function ConversationView({
                 {/* Assistant Content & Structured Turn Renderers */}
                 {!isUser && (
                   <div className="space-y-4">
-                    {/* Header Pill */}
-                    {msg.turnType && (
-                      <div className="flex items-center justify-between pb-2 border-b border-stone-100">
-                        <span className="text-[10px] font-mono uppercase tracking-wider font-semibold text-orange-700">
-                          {msg.turnType.replace('_', ' ')}
-                        </span>
-                        <button
-                          onClick={() => handleCopy(msg)}
-                          className="text-stone-400 hover:text-stone-700 p-1 rounded transition-colors"
-                          title="Copy text"
-                        >
-                          {copiedMsgId === msg.id ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}
+                    {msg.turnType && msg.turnType !== 'completion_summary' && (
+                      <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-[0.16em] text-orange-300/80">
+                        <span className="h-1.5 w-1.5 rounded-full bg-orange-400" />
+                        <span>{msg.turnType.replaceAll('_', ' ')}</span>
+                      </div>
+                    )}
+                    {msg.content && msg.turnType === 'completion_summary' && (
+                      <div className="flex justify-end pb-1">
+                        <button onClick={() => handleCopy(msg)} className="text-stone-500 hover:text-stone-200 p-1.5 rounded-lg" title="Copy response">
+                          {copiedMsgId === msg.id ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
                         </button>
                       </div>
                     )}
 
                     {/* Main Narrative Text */}
                     {msg.content && (
-                      <div className="prose prose-stone prose-sm max-w-none text-stone-800 leading-relaxed whitespace-pre-wrap">
+                      <div className="prose prose-invert prose-sm max-w-none text-stone-200 leading-7 whitespace-pre-wrap">
                         {msg.content}
                       </div>
                     )}
 
+                    <AgentActivityStream events={msg.activity} subagents={msg.subagents} onInspectSubagent={onInspectSubagent} />
+
+                    {msg.questions && msg.questions.length > 1 && msg.questions.some((question) => question.status === 'pending') ? (
+                      <QuestionSetCard questions={msg.questions.filter((question) => question.status === 'pending' || question.answer !== undefined)} onAnswer={(answer) => onAnswerQuestion?.(msg.id, answer)} />
+                    ) : msg.question && msg.question.status === 'pending' ? (
+                      <QuestionCard question={msg.question} onAnswer={(answer) => onAnswerQuestion?.(msg.id, answer)} />
+                    ) : null}
+
                     {/* Plan Card */}
                     {msg.plan && (
-                      <div className="bg-stone-50 border border-stone-200 rounded-xl p-3.5 space-y-3">
-                        <div className="flex items-center justify-between">
+                      <details className="group rounded-2xl border border-white/10 bg-white/[0.025] p-3.5 space-y-3">
+                        <summary className="flex cursor-pointer list-none items-center justify-between text-stone-300">
                           <div className="flex items-center gap-2">
-                            <Layers size={15} className="text-stone-700" />
-                            <span className="font-semibold text-xs text-stone-900">Execution Plan</span>
+                            <Layers size={15} className="text-orange-300" />
+                            <span className="text-xs font-medium">Execution details</span>
+                            <span className="text-[11px] text-stone-500">{msg.plan.steps.filter((step) => step.status === 'completed').length}/{msg.plan.steps.length} steps</span>
                           </div>
-                          <span className="text-[10px] font-mono px-2 py-0.5 bg-stone-200 text-stone-700 rounded-full">
-                            {msg.plan.delegationMode.toUpperCase()}
+                          <span className="text-[10px] font-mono text-stone-500 uppercase tracking-wider">
+                            {msg.plan.delegationMode}
                           </span>
-                        </div>
+                        </summary>
 
                         <div className="space-y-2">
                           {msg.plan.steps.map((step, idx) => (
@@ -196,18 +207,18 @@ export function ConversationView({
                             </div>
                           ))}
                         </div>
-                      </div>
+                      </details>
                     )}
 
                     {/* Subagents Delegation Badges */}
                     {msg.subagents && msg.subagents.length > 0 && (
-                      <div className="bg-stone-50 border border-stone-200 rounded-xl p-3.5 space-y-2.5">
-                        <div className="flex items-center justify-between text-xs font-semibold text-stone-800">
-                          <span>Specialist Subagents Dispatched</span>
+                      <details className="group rounded-2xl border border-white/10 bg-white/[0.025] p-3.5 space-y-2.5">
+                        <summary className="flex cursor-pointer list-none items-center justify-between text-xs font-medium text-stone-300">
+                          <span>Specialists working</span>
                           <span className="text-[10px] font-mono text-stone-500">
-                            {msg.subagents.filter((s) => s.status === 'completed').length}/{msg.subagents.length} Completed
+                            {msg.subagents.filter((s) => s.status === 'completed').length}/{msg.subagents.length}
                           </span>
-                        </div>
+                        </summary>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           {msg.subagents.map((sub) => (
                             <div
@@ -239,7 +250,7 @@ export function ConversationView({
                             </div>
                           ))}
                         </div>
-                      </div>
+                      </details>
                     )}
 
                     {/* Tool Approval Card */}
@@ -352,20 +363,13 @@ export function ConversationView({
                       </div>
                     )}
 
-                    {/* Generated Artifacts Quick Links */}
+                    {/* Inline generated work products */}
                     {msg.artifactIds && msg.artifactIds.length > 0 && (
-                      <div className="pt-1 flex flex-wrap gap-2">
-                        {msg.artifactIds.map((artId) => (
-                          <button
-                            key={artId}
-                            onClick={() => onOpenArtifact(artId)}
-                            className="flex items-center gap-2 px-3 py-1.5 bg-orange-50 hover:bg-orange-100 border border-orange-200 rounded-xl text-xs font-semibold text-orange-950 transition-colors shadow-2xs"
-                          >
-                            <Layers size={14} className="text-orange-700" />
-                            <span>Open Artifact in Canvas</span>
-                            <ArrowRight size={12} className="text-orange-700" />
-                          </button>
-                        ))}
+                      <div className="space-y-3 pt-1">
+                        {msg.artifactIds.map((artId) => {
+                          const artifact = artifacts.find((item) => item.id === artId);
+                          return artifact ? <div key={artId}><InlineArtifactCard artifact={artifact} onPromptRevision={onPromptRevision} onSaveToProjectSources={onSaveToProjectSources} onSaveVersion={onSaveVersion} /></div> : null;
+                        })}
                       </div>
                     )}
                   </div>
@@ -374,9 +378,7 @@ export function ConversationView({
 
               {/* User Avatar */}
               {isUser && (
-                <div className="w-8 h-8 rounded-xl bg-stone-800 text-stone-200 flex items-center justify-center shrink-0 mt-0.5 text-xs font-semibold shadow-2xs">
-                  FC
-                </div>
+                <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-stone-700 text-stone-200"><User size={14} /></div>
               )}
             </div>
           );
@@ -414,6 +416,96 @@ export function ConversationView({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+
+function QuestionCard({ question, onAnswer }: { question: import('../types').AgentQuestion; onAnswer: (answer: string | string[]) => void }) {
+  const [customAnswer, setCustomAnswer] = useState('');
+  const [selected, setSelected] = useState<string[]>([]);
+  const hasOptions = Boolean(question.options?.length);
+
+  const submit = (value?: string) => {
+    const answer = value ?? (question.allowMultiple ? selected : customAnswer.trim());
+    if (Array.isArray(answer) ? answer.length : answer) onAnswer(answer);
+  };
+
+  return (
+    <div className="question-card rounded-2xl border border-orange-300/35 bg-[#25211e] p-4 text-stone-100 shadow-sm">
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-orange-300 bg-white text-orange-700 text-xs font-semibold">?</div>
+        <div className="min-w-0 flex-1 space-y-3">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-orange-300">{question.header || 'Your input is needed'}</p>
+            <p className="mt-1 text-sm leading-6 text-stone-800">{question.prompt}</p>
+          </div>
+          {hasOptions && (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {question.options?.map((option) => {
+                const isSelected = selected.includes(option.value);
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => question.allowMultiple ? setSelected(isSelected ? selected.filter((v) => v !== option.value) : [...selected, option.value]) : submit(option.value)}
+                    className={`rounded-xl border px-3 py-2.5 text-left transition ${isSelected ? 'border-orange-400 bg-orange-400/15' : 'border-white/10 bg-[#171615] hover:border-orange-300/60 hover:bg-white/[0.06]'}`}
+                  >
+                    <span className="block text-xs font-semibold">{option.label}</span>
+                    {option.description && <span className="mt-1 block text-[11px] leading-4 text-stone-500">{option.description}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {question.allowMultiple && selected.length > 0 && <button type="button" onClick={() => submit()} className="rounded-lg bg-stone-900 px-3 py-2 text-xs font-semibold text-white">Continue</button>}
+          {!hasOptions && (
+            <div className="flex gap-2">
+              <input value={customAnswer} onChange={(event) => setCustomAnswer(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && submit()} placeholder="Type your answer" className="min-w-0 flex-1 rounded-xl border border-white/10 bg-[#171615] px-3 py-2 text-sm outline-none focus:border-orange-500" />
+              <button type="button" onClick={() => submit()} className="rounded-xl bg-stone-900 px-3 py-2 text-xs font-semibold text-white">Answer</button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+function QuestionSetCard({ questions, onAnswer }: { questions: import('../types').AgentQuestion[]; onAnswer: (answer: Record<string, string | string[]>) => void }) {
+  const [index, setIndex] = useState(0);
+  const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
+  const current = questions[index];
+  const currentAnswer = answers[current.id];
+  const choose = (value: string | string[]) => setAnswers((previous) => ({ ...previous, [current.id]: value }));
+  const canAdvance = currentAnswer !== undefined && (Array.isArray(currentAnswer) ? currentAnswer.length > 0 : Boolean(currentAnswer));
+
+  return (
+    <div className="question-card rounded-2xl border border-orange-300/35 bg-[#25211e] p-4 text-stone-100 shadow-sm">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <div className="flex h-7 w-7 items-center justify-center rounded-full border border-orange-300/50 bg-orange-400/10 text-orange-300 text-xs">?</div>
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-orange-300">{current.header || 'Your input is needed'}</p>
+            <p className="mt-1 text-[11px] text-stone-500">Decision {index + 1} of {questions.length}</p>
+          </div>
+        </div>
+        <div className="flex gap-1">
+          {questions.map((question, questionIndex) => <span key={question.id} className={`h-1.5 w-5 rounded-full ${questionIndex === index ? 'bg-orange-400' : answers[question.id] ? 'bg-emerald-400/70' : 'bg-white/10'}`} />)}
+        </div>
+      </div>
+      <p className="mb-4 text-sm leading-6 text-stone-200">{current.prompt}</p>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {current.options?.map((option) => {
+          const selected = Array.isArray(currentAnswer) ? currentAnswer.includes(option.value) : currentAnswer === option.value;
+          return <button key={option.id} type="button" onClick={() => current.allowMultiple ? choose(selected ? (currentAnswer as string[]).filter((value) => value !== option.value) : [...((currentAnswer as string[]) || []), option.value]) : choose(option.value)} className={`rounded-xl border px-3 py-3 text-left transition ${selected ? 'border-orange-400 bg-orange-400/15' : 'border-white/10 bg-[#171615] hover:border-orange-300/60 hover:bg-white/[0.06]'}`}><span className="block text-xs font-semibold text-stone-100">{option.label}</span>{option.description && <span className="mt-1 block text-[11px] leading-4 text-stone-500">{option.description}</span>}</button>;
+        })}
+      </div>
+      {current.allowCustomAnswer && <input value={typeof currentAnswer === 'string' && !current.options?.some((option) => option.value === currentAnswer) ? currentAnswer : ''} onChange={(event) => choose(event.target.value)} placeholder="Or type your own answer" className="mt-3 w-full rounded-xl border border-white/10 bg-[#171615] px-3 py-2 text-sm outline-none focus:border-orange-400" />}
+      <div className="mt-4 flex justify-between gap-2">
+        <button type="button" onClick={() => setIndex((value) => Math.max(0, value - 1))} disabled={index === 0} className="rounded-lg px-3 py-2 text-xs text-stone-500 disabled:opacity-30">Back</button>
+        {index < questions.length - 1 ? <button type="button" onClick={() => canAdvance && setIndex((value) => value + 1)} disabled={!canAdvance} className="rounded-lg bg-orange-400 px-4 py-2 text-xs font-semibold text-[#1d110b] disabled:opacity-40">Next</button> : <button type="button" onClick={() => canAdvance && onAnswer(answers)} disabled={!canAdvance} className="rounded-lg bg-orange-400 px-4 py-2 text-xs font-semibold text-[#1d110b] disabled:opacity-40">Continue</button>}
+      </div>
     </div>
   );
 }

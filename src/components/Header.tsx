@@ -1,9 +1,8 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import {
   Menu,
   BrainCircuit,
   Bot,
-  PanelRight,
   Search,
   Sparkles,
   ShieldAlert,
@@ -22,8 +21,6 @@ interface HeaderProps {
   onSelectAgent: (agentId: string) => void;
   memoryMode: MemoryMode;
   onChangeMemoryMode: (mode: MemoryMode) => void;
-  isArtifactPanelOpen: boolean;
-  onToggleArtifactPanel: () => void;
   onOpenMobileNav: () => void;
   onOpenSearch: () => void;
 }
@@ -36,26 +33,24 @@ export function Header({
   onSelectAgent,
   memoryMode,
   onChangeMemoryMode,
-  isArtifactPanelOpen,
-  onToggleArtifactPanel,
   onOpenMobileNav,
   onOpenSearch
 }: HeaderProps) {
   const [showMemoryDropdown, setShowMemoryDropdown] = useState(false);
   const [showAgentDropdown, setShowAgentDropdown] = useState(false);
 
-  const selectedAgent = agents.find((a) => a.id === selectedAgentId) || agents[0];
+  const selectedAgent = agents.find((a) => a.id === selectedAgentId) || agents[0] || { id: 'lattice-primary', name: 'Lattice Orchestrator', description: 'Primary agent for planning and safe task execution.', enabled: true };
 
   const getMemoryLabel = (mode: MemoryMode) => {
     switch (mode) {
       case 'project_only':
-        return { label: 'Project-Only Memory', icon: Lock, color: 'text-orange-700 bg-orange-50 border-orange-200' };
+        return { label: 'Project memory', icon: Lock, color: 'text-orange-700 bg-orange-50 border-orange-200' };
       case 'global':
-        return { label: 'Global Memory Active', icon: Globe, color: 'text-emerald-700 bg-emerald-50 border-emerald-200' };
+        return { label: 'Global memory', icon: Globe, color: 'text-emerald-700 bg-emerald-50 border-emerald-200' };
       case 'temporary_off':
-        return { label: 'Memory Temp-Off', icon: BrainCircuit, color: 'text-stone-600 bg-stone-100 border-stone-200' };
+        return { label: 'Memory off', icon: BrainCircuit, color: 'text-stone-600 bg-stone-100 border-stone-200' };
       default:
-        return { label: 'Conversation Scope', icon: BrainCircuit, color: 'text-stone-600 bg-stone-100 border-stone-200' };
+        return { label: 'Conversation only', icon: BrainCircuit, color: 'text-stone-600 bg-stone-100 border-stone-200' };
     }
   };
 
@@ -91,11 +86,11 @@ export function Header({
             </div>
           ) : (
             <div className="flex items-center gap-1.5 min-w-0">
-              <span className="px-2 py-0.5 rounded bg-stone-200 text-stone-700 font-mono text-[10px] uppercase tracking-wider">
-                Standalone Scope
+              <span className="text-[10px] uppercase tracking-[0.18em] text-stone-500">
+                Standalone
               </span>
               <span className="font-medium text-stone-800 truncate">
-                {activeConversation?.title || 'New Workspace'}
+                {activeConversation?.title || 'New conversation'}
               </span>
             </div>
           )}
@@ -228,19 +223,6 @@ export function Header({
           <Search size={15} />
         </button>
 
-        {/* Artifact Canvas Toggle */}
-        <button
-          id="toggle-artifact-panel-btn"
-          onClick={onToggleArtifactPanel}
-          className={`p-1.5 rounded-lg border transition-colors ${
-            isArtifactPanelOpen
-              ? 'bg-stone-900 text-white border-stone-900'
-              : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-100'
-          }`}
-          title={isArtifactPanelOpen ? 'Hide Artifact Canvas' : 'Open Artifact Canvas'}
-        >
-          <PanelRight size={15} />
-        </button>
       </div>
     </header>
   );

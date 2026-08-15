@@ -16,9 +16,10 @@ import { SkillDefinition } from '../types';
 interface SkillDirectoryProps {
   skills: SkillDefinition[];
   onSaveSkill: (skill: SkillDefinition) => void;
+  onDeleteSkill: (skillId: string) => void;
 }
 
-export function SkillDirectory({ skills, onSaveSkill }: SkillDirectoryProps) {
+export function SkillDirectory({ skills, onSaveSkill, onDeleteSkill }: SkillDirectoryProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [name, setName] = useState('');
   const [trigger, setTrigger] = useState('/');
@@ -44,7 +45,7 @@ export function SkillDirectory({ skills, onSaveSkill }: SkillDirectoryProps) {
       risk: 'low',
       version: '1.0.0',
       enabled: true,
-      author: 'Frank Chibuike'
+      author: 'Workspace owner'
     };
 
     onSaveSkill(newSkill);
@@ -175,8 +176,16 @@ export function SkillDirectory({ skills, onSaveSkill }: SkillDirectoryProps) {
                   <h4 className="font-semibold text-xs text-stone-900">{skill.name}</h4>
                 </div>
 
-                <button
-                  onClick={() => toggleSkill(skill)}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => onDeleteSkill(skill.id)}
+                    className="text-stone-500 hover:text-red-400"
+                    title="Delete skill"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                  <button
+                    onClick={() => toggleSkill(skill)}
                   className="text-stone-500 hover:text-stone-900"
                   title={skill.enabled ? 'Disable' : 'Enable'}
                 >
@@ -186,6 +195,7 @@ export function SkillDirectory({ skills, onSaveSkill }: SkillDirectoryProps) {
                     <ToggleLeft size={22} className="text-stone-300" />
                   )}
                 </button>
+                </div>
               </div>
 
               <p className="text-xs text-stone-600 leading-relaxed font-sans">{skill.description}</p>

@@ -18,13 +18,15 @@ interface ScheduledTaskManagerProps {
   projects: Project[];
   onSaveSchedule: (schedule: ScheduledTask) => void;
   onRunScheduleNow: (scheduleId: string) => void;
+  onDeleteSchedule: (scheduleId: string) => void;
 }
 
 export function ScheduledTaskManager({
   schedules,
   projects,
   onSaveSchedule,
-  onRunScheduleNow
+  onRunScheduleNow,
+  onDeleteSchedule
 }: ScheduledTaskManagerProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [name, setName] = useState('');
@@ -180,6 +182,13 @@ export function ScheduledTaskManager({
                     <span>Run Now</span>
                   </button>
 
+                  <button
+                    onClick={() => onDeleteSchedule(task.id)}
+                    className="p-1.5 text-stone-500 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                    title="Delete scheduled task"
+                  >
+                    <Trash2 size={15} />
+                  </button>
                   <button
                     onClick={() => toggleStatus(task)}
                     className="p-1.5 text-stone-500 hover:text-stone-900 hover:bg-stone-100 rounded-lg transition-colors"

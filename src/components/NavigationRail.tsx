@@ -1,14 +1,9 @@
 import { useState } from 'react';
 import {
-  MessageSquarePlus,
   FolderOpen,
-  Layers,
-  Database,
-  Users,
-  Calendar,
-  Radio,
-  BrainCircuit,
   Settings,
+  CircleHelp,
+  Languages,
   ChevronLeft,
   ChevronRight,
   MoreVertical,
@@ -84,16 +79,10 @@ export function NavigationRail({
   const [renameConvId, setRenameConvId] = useState<string | null>(null);
   const [renameText, setRenameText] = useState('');
   const [moveModalConvId, setMoveModalConvId] = useState<string | null>(null);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
 
   const navItems = [
-    { id: 'chat', label: 'Conversation', icon: MessageSquarePlus },
-    { id: 'projects', label: 'Projects', icon: FolderOpen, count: projects.length },
-    { id: 'artifacts', label: 'Artifacts', icon: Layers },
-    { id: 'sources', label: 'Sources', icon: Database },
-    { id: 'agents_skills', label: 'Agents & Skills', icon: Users },
-    { id: 'schedules', label: 'Schedules', icon: Calendar },
-    { id: 'connections', label: 'Connections (MCP)', icon: Radio },
-    { id: 'memory', label: 'Memory', icon: BrainCircuit }
+    { id: 'projects', label: 'Projects', icon: FolderOpen, count: projects.length, section: 'Workspace' }
   ];
 
   const standaloneConversations = conversations.filter(
@@ -149,8 +138,8 @@ export function NavigationRail({
                 <span className="font-semibold tracking-tight text-white text-sm">
                   Lattice
                 </span>
-                <span className="text-[10px] text-stone-400 font-mono tracking-wider">
-                  AGENTIC WORKSPACE
+                <span className="text-[10px] text-stone-500 tracking-[0.16em]">
+                  AGENT WORKSPACE
                 </span>
               </div>
             )}
@@ -194,17 +183,20 @@ export function NavigationRail({
           title="New Conversation"
         >
           <Plus size={16} />
-          {!isCollapsed && <span>New Conversation</span>}
+          {!isCollapsed && <span>New chat</span>}
         </button>
       </div>
 
       {/* Main Nav Items */}
       <div className="flex-1 overflow-y-auto px-2 space-y-1 py-1 scrollbar-thin scrollbar-thumb-stone-800">
         <div className="space-y-0.5">
-          {navItems.map((item) => {
+          {navItems.map((item, index) => {
             const Icon = item.icon;
             const isActive = currentView === item.id;
+            const showSection = !isCollapsed && (index === 0 || navItems[index - 1].section !== item.section);
             return (
+              <div key={item.id}>
+                {showSection && <div className="px-2 pb-1 pt-3 text-[9px] font-medium uppercase tracking-[0.18em] text-stone-600">{item.section}</div>}
               <button
                 key={item.id}
                 id={`nav-item-${item.id}`}
@@ -229,6 +221,7 @@ export function NavigationRail({
                   </span>
                 )}
               </button>
+              </div>
             );
           })}
         </div>
@@ -281,13 +274,14 @@ export function NavigationRail({
           </div>
         )}
 
-        {/* Standalone Recent Chats */}
-        {!isCollapsed && standaloneConversations.length > 0 && (
+        {/* Recent Chats */}
+        {!isCollapsed && (
           <div className="pt-3 pb-1">
             <div className="px-2 pb-1 text-[11px] font-semibold text-stone-500 uppercase tracking-wider">
               <span>Recent Chats</span>
             </div>
             <div className="space-y-0.5">
+              {standaloneConversations.length === 0 && <p className="px-2.5 py-2 text-[11px] leading-5 text-stone-600">Your recent conversations will appear here.</p>}
               {standaloneConversations.slice(0, 6).map((conv) => {
                 const isSelected =
                   activeConversationId === conv.id && currentView === 'chat';
@@ -434,11 +428,23 @@ export function NavigationRail({
         </div>
       )}
 
-      {/* Footer Profile & Settings */}
-      <div className="p-2.5 border-t border-stone-800 flex items-center justify-between">
+      {/* Footer Profile, settings, and capability access */}
+      <div className="relative border-t border-stone-800 p-2.5">
+        {showProfileMenu && !isCollapsed && (
+          <div className="absolute bottom-[calc(100%+8px)] left-2 right-2 z-50 overflow-hidden rounded-2xl border border-stone-700 bg-[#202020] p-1.5 shadow-2xl">
+            <div className="border-b border-stone-700 px-3 py-2.5"><p className="truncate text-xs font-medium text-stone-100">{user.email}</p><p className="mt-0.5 text-[10px] text-stone-500">Workspace controls</p></div>
+            <button onClick={() => { onOpenSettings(); setShowProfileMenu(false); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-stone-300 hover:bg-stone-800 hover:text-white"><Settings size={14} />Settings</button>
+            <button onClick={() => setShowProfileMenu(false)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-stone-300 hover:bg-stone-800 hover:text-white"><Languages size={14} />Language</button>
+            <div className="my-1 border-t border-stone-800" />
+            <p className="px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.16em] text-stone-600">Capability controls</p>
+            {([['agents_skills', 'Agents & skills'], ['connections', 'MCP connectors'], ['memory', 'Memory'], ['schedules', 'Schedules'], ['sources', 'Sources'], ['artifacts', 'Work products']] as const).map(([view, label]) => <button key={view} onClick={() => { onSelectView(view); setShowProfileMenu(false); }} className="w-full rounded-lg px-3 py-2 text-left text-xs text-stone-400 hover:bg-stone-800 hover:text-white">{label}</button>)}
+            <div className="my-1 border-t border-stone-800" />
+            <button onClick={() => setShowProfileMenu(false)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-stone-400 hover:bg-stone-800 hover:text-white"><CircleHelp size={14} />Get help</button>
+          </div>
+        )}
         <div
-          className="flex items-center gap-2.5 cursor-pointer min-w-0"
-          onClick={onOpenSettings}
+          className="flex cursor-pointer items-center justify-between gap-2.5 min-w-0"
+          onClick={() => setShowProfileMenu((open) => !open)}
         >
           <div className="w-8 h-8 rounded-full bg-stone-800 border border-stone-700 flex items-center justify-center text-xs font-semibold text-stone-200 shrink-0">
             {user.displayName.substring(0, 2).toUpperCase()}
@@ -455,16 +461,7 @@ export function NavigationRail({
             </div>
           )}
         </div>
-        {!isCollapsed && (
-          <button
-            id="settings-rail-btn"
-            onClick={onOpenSettings}
-            className="p-1.5 text-stone-400 hover:text-white rounded-lg hover:bg-stone-800 transition-colors"
-            title="Settings"
-          >
-            <Settings size={16} />
-          </button>
-        )}
+        {!isCollapsed && <span className="px-1 text-stone-500">⌃</span>}
       </div>
     </aside>
     </>

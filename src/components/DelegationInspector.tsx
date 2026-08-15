@@ -1,14 +1,5 @@
-import {
-  X,
-  Bot,
-  CheckCircle2,
-  Clock,
-  AlertTriangle,
-  RotateCw,
-  Layers,
-  FileText,
-  Sparkles
-} from 'lucide-react';
+import React from 'react';
+import { ArrowLeft, Bot, CheckCircle2, Clock3, FileText, Layers, LockKeyhole, X } from 'lucide-react';
 import { SubagentTask } from '../types';
 
 interface DelegationInspectorProps {
@@ -17,114 +8,35 @@ interface DelegationInspectorProps {
   onPromoteToArtifact?: (task: SubagentTask) => void;
 }
 
-export function DelegationInspector({
-  task,
-  onClose,
-  onPromoteToArtifact
-}: DelegationInspectorProps) {
+export function DelegationInspector({ task, onClose, onPromoteToArtifact }: DelegationInspectorProps) {
   if (!task) return null;
+  const activity = task.activity || [];
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white border border-stone-200 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-stone-100">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-stone-900 text-white flex items-center justify-center">
-              <Bot size={16} />
-            </div>
-            <div>
-              <h3 className="font-bold text-sm text-stone-900 capitalize">
-                {task.role.replace('_', ' ')} Subagent Task
-              </h3>
-              <p className="text-[10px] font-mono text-stone-400">ID: {task.taskId}</p>
-            </div>
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/55 backdrop-blur-[2px]" onClick={onClose}>
+      <aside className="flex h-full w-full max-w-[560px] flex-col border-l border-white/10 bg-[#141312] text-stone-100 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+        <header className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <button type="button" onClick={onClose} className="rounded-lg p-2 text-stone-500 hover:bg-white/[0.06] hover:text-stone-100" title="Close nested session"><ArrowLeft size={16} /></button>
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-orange-400/12 text-orange-300"><Bot size={16} /></div>
+            <div className="min-w-0"><p className="truncate text-sm font-medium">{task.role.replace('_', ' ')} subagent</p><p className="mt-0.5 text-[10px] uppercase tracking-[0.16em] text-stone-600">Nested read-only session</p></div>
           </div>
-          <button onClick={onClose} className="text-stone-400 hover:text-stone-700">
-            <X size={16} />
-          </button>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-stone-600 hover:bg-white/[0.06] hover:text-stone-100" title="Close"><X size={16} /></button>
+        </header>
+
+        <div className="border-b border-white/8 bg-[#171615] px-5 py-3 text-[11px] text-stone-500"><span className="text-stone-300">Primary agent delegated:</span> {task.goal}<div className="mt-2 flex flex-wrap gap-2"><span className="rounded-full border border-white/10 px-2 py-1">{task.status}</span><span className="rounded-full border border-white/10 px-2 py-1">{task.tokensUsed}/{task.tokenBudget} tokens</span><span className="rounded-full border border-white/10 px-2 py-1">{Math.round(task.confidence * 100)}% confidence</span></div></div>
+
+        <div className="flex-1 overflow-y-auto px-5 py-6">
+          <div className="space-y-6">
+            <div className="flex gap-3"><div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/[0.07] text-stone-400"><LockKeyhole size={13} /></div><div className="max-w-[420px] rounded-2xl rounded-tl-md bg-white/[0.05] px-4 py-3 text-[13px] leading-6 text-stone-300"><p className="mb-1 text-[10px] uppercase tracking-[0.16em] text-stone-600">Delegation brief</p>{task.goal}<p className="mt-2 text-[11px] text-stone-600">The parent orchestrator owns this session. You can inspect progress and output, but messages are routed through the parent.</p></div></div>
+            <div className="space-y-2 border-l border-white/10 pl-5">{activity.length === 0 ? <p className="text-xs text-stone-600">No nested activity has been emitted yet.</p> : activity.map((event) => <div key={event.id} className="flex gap-3 text-[12px] leading-5 text-stone-400"><span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-orange-300/70" /><div><p className="text-stone-300">{event.title}</p>{event.detail && <p className="text-stone-600">{event.detail}</p>}</div></div>)}</div>
+            {task.outputPayload && <div className="flex gap-3"><div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-400/10 text-emerald-300"><CheckCircle2 size={14} /></div><div className="max-w-[450px] rounded-2xl rounded-tl-md border border-emerald-400/15 bg-emerald-400/[0.05] px-4 py-3 text-[13px] leading-6 text-stone-300"><p className="mb-1 text-[10px] uppercase tracking-[0.16em] text-emerald-300/70">Subagent output</p><pre className="whitespace-pre-wrap font-sans text-[12px]">{JSON.stringify(task.outputPayload, null, 2)}</pre></div></div>}
+            {task.citations && task.citations.length > 0 && <div className="rounded-xl border border-white/8 bg-white/[0.025] p-3"><div className="mb-2 flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-stone-600"><FileText size={12} /> Source provenance</div><div className="space-y-1 text-[11px] text-stone-500">{task.citations.map((citation, index) => <p key={index} className="truncate">{typeof citation === 'string' ? citation : citation.title || citation.url || 'Verified source'}</p>)}</div></div>}
+          </div>
         </div>
 
-        {/* Content Body */}
-        <div className="flex-1 overflow-y-auto space-y-4 text-xs pr-1 scrollbar-thin">
-          <div className="space-y-1">
-            <label className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider">Goal / Objective</label>
-            <p className="font-medium text-stone-900 bg-stone-50 p-2.5 rounded-xl border border-stone-100">
-              {task.goal}
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-stone-50 p-3 rounded-xl border border-stone-100">
-              <span className="text-[10px] text-stone-400 uppercase font-semibold">Token Budget</span>
-              <div className="font-mono text-xs text-stone-800 mt-0.5">
-                {task.tokensUsed} / {task.tokenBudget} used
-              </div>
-            </div>
-            <div className="bg-stone-50 p-3 rounded-xl border border-stone-100">
-              <span className="text-[10px] text-stone-400 uppercase font-semibold">Confidence Score</span>
-              <div className="font-mono text-xs text-emerald-700 font-semibold mt-0.5">
-                {(task.confidence * 100).toFixed(0)}% Verified
-              </div>
-            </div>
-          </div>
-
-          {/* Input & Output Payloads */}
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider">Input Payload</label>
-            <pre className="p-3 bg-stone-900 text-stone-200 rounded-xl font-mono text-[11px] overflow-x-auto">
-              {JSON.stringify(task.inputPayload, null, 2)}
-            </pre>
-          </div>
-
-          {task.outputPayload && (
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider">Synthesized Output</label>
-              <pre className="p-3 bg-stone-900 text-emerald-300 rounded-xl font-mono text-[11px] overflow-x-auto">
-                {JSON.stringify(task.outputPayload, null, 2)}
-              </pre>
-            </div>
-          )}
-
-          {task.citations && task.citations.length > 0 && (
-            <div className="space-y-1">
-              <label className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider">Source Provenance</label>
-              <div className="flex flex-wrap gap-1">
-                {task.citations.map((cit, i) => (
-                  <span key={i} className="px-2 py-0.5 bg-stone-100 border border-stone-200 rounded text-[11px] text-stone-700">
-                    {cit}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Footer Actions */}
-        <div className="pt-3 border-t border-stone-100 flex items-center justify-between">
-          {onPromoteToArtifact && (
-            <button
-              onClick={() => onPromoteToArtifact(task)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-950 rounded-xl text-xs font-semibold border border-orange-200 transition-colors"
-            >
-              <Layers size={13} className="text-orange-700" />
-              <span>Promote to Artifact</span>
-            </button>
-          )}
-          <button
-            onClick={onClose}
-            className="px-4 py-1.5 bg-stone-900 text-white rounded-xl text-xs font-medium hover:bg-stone-800 ml-auto"
-          >
-            Close
-          </button>
-        </div>
-      </div>
+        <footer className="flex items-center justify-between border-t border-white/10 px-5 py-4"><span className="flex items-center gap-2 text-[11px] text-stone-600"><Clock3 size={13} /> Inspection only · no direct subagent messaging</span>{onPromoteToArtifact && <button type="button" onClick={() => onPromoteToArtifact(task)} className="flex items-center gap-2 rounded-xl bg-orange-400 px-3 py-2 text-xs font-semibold text-[#20110b]"><Layers size={13} /> Promote output</button>}</footer>
+      </aside>
     </div>
   );
 }

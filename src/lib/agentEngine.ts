@@ -8,15 +8,22 @@ import {
   Artifact,
   Citation,
   Project,
-  MemoryMode
+  MemoryMode,
+  AgentQuestion,
+  AgentActivityEvent,
+  AgentMode
 } from '../types';
 import { latticeStore } from './store';
+import { getProviderConfig, runProviderChat } from './providerClient';
+import { exaSearch, type ExaResult } from './exaTool';
 
 export interface RunExecutionCallbacks {
   onPlanCreated: (plan: { goal: string; steps: PlanStep[]; delegationMode: 'parallel' | 'sequential' | 'hierarchical' | 'reviewer_loop' }) => void;
   onSubagentProgress: (task: SubagentTask) => void;
   onApprovalRequired: (approval: ToolApprovalRequest) => void;
   onBlockedContinuation: (packet: ToolContinuationPacket) => void;
+  onQuestionRequired?: (question: AgentQuestion | AgentQuestion[]) => void;
+  onActivity?: (event: AgentActivityEvent) => void;
   onArtifactCreated: (artifact: Artifact) => void;
   onComplete: (summary: string, citations: Citation[], artifactIds: string[]) => void;
 }
@@ -36,6 +43,7 @@ export class AgentEngine {
     conversationId: string,
     projectId: string | undefined,
     memoryMode: MemoryMode,
+    mode: AgentMode = 'act',
     callbacks: RunExecutionCallbacks
   ) {
     this.activeAbortController = new AbortController();
@@ -43,6 +51,9 @@ export class AgentEngine {
     const lowerPrompt = prompt.toLowerCase();
     const project = projectId ? latticeStore.getProject(projectId) : undefined;
     const projectSources = projectId ? latticeStore.getSources(projectId) : [];
+    let liveExaResults: ExaResult[] = [];
+    const emitActivity = (event: Omit<AgentActivityEvent, 'id' | 'runId' | 'timestamp'>) => callbacks.onActivity?.({ ...event, id: `activity_${Math.random().toString(36).substring(2, 8)}`, runId, timestamp: new Date().toISOString() });
+    emitActivity({ type: 'thought', title: 'Reading the request', detail: 'Parsing intent, scope, memory policy, and likely deliverable.', status: 'running' });
 
     // 1. Detect Intent, Roles & Multi-Step Delegation
     let isAgenticToolsResearch = lowerPrompt.includes('agentic tool') || lowerPrompt.includes('agentic') || lowerPrompt.includes('tool use') || lowerPrompt.includes('mcp') || lowerPrompt.includes('model context protocol') || lowerPrompt.includes('function calling');
@@ -116,12 +127,64 @@ export class AgentEngine {
       });
     }
 
+    const configuredProvider = getProviderConfig();
+    const needsDelegation = /research|compare|audit|verify|analy[sz]e|design|build|plan|strategy|architecture|competitive|benchmark/i.test(prompt) || prompt.length > 180;
+
+    emitActivity({ type: 'thought', title: mode === 'plan' ? 'Drafting a plan' : 'Building an execution plan', detail: `${steps.length} staged actions with explicit safety and completion criteria.`, status: 'completed' });
+    if (projectSources.length > 0) emitActivity({ type: 'context_read', title: 'Project context attached', detail: `Using ${projectSources.length} scoped source${projectSources.length === 1 ? '' : 's'} under ${project?.name || 'active project'}.`, status: 'completed', scope: memoryMode });
+
     // Emit Plan
     callbacks.onPlanCreated({
       goal: prompt,
       steps,
-      delegationMode: 'parallel'
+      delegationMode: subagents.length > 1 ? 'parallel' : 'sequential'
     });
+
+    if (callbacks.onQuestionRequired && !lowerPrompt.includes('user decisions:') && (lowerPrompt.includes('need your choice') || lowerPrompt.includes('ask me a question') || lowerPrompt.includes('clarify before'))) {
+      callbacks.onQuestionRequired([
+        {
+          id: `question_${runId}_depth`,
+          header: 'Response shape',
+          prompt: 'How much depth should I use?',
+          options: [
+            { id: 'focused', label: 'Focused answer', description: 'Keep the output concise and practical.', value: 'focused' },
+            { id: 'deep', label: 'Deep answer', description: 'Include research, alternatives, and implementation detail.', value: 'deep' }
+          ],
+          required: true,
+          status: 'pending'
+        },
+        {
+          id: `question_${runId}_context`,
+          header: 'Working context',
+          prompt: 'Should I keep this standalone or use the active project context?',
+          options: [
+            { id: 'standalone', label: 'Standalone', description: 'Do not use project sources or memory.', value: 'standalone' },
+            { id: 'project', label: 'Active project', description: 'Use the selected project instructions and sources.', value: 'project' }
+          ],
+          required: true,
+          status: 'pending'
+        }
+      ]);
+      return;
+    }
+
+    if (mode === 'plan') {
+      const planSummary = `I drafted a plan for this request without executing side effects. Switch to Act when you want me to use approved tools, load relevant skills, delegate specialists, or create an inline work product.\n\n${steps.map((step, index) => `${index + 1}. ${step.objective}`).join('\n')}`;
+      emitActivity({ type: 'status', title: 'Plan ready', detail: 'No external writes or durable artifacts were created in Plan mode.', status: 'completed' });
+      callbacks.onComplete(planSummary, [], []);
+      return;
+    }
+
+    if (configuredProvider && !needsDelegation) {
+      const response = await runProviderChat(
+        configuredProvider,
+        configuredProvider.defaultModel || 'latest',
+        prompt,
+        'You are the primary Lattice agent. Answer directly for this simple request. Do not claim to have used tools you did not use. Be concise, useful, and transparent about limitations.'
+      );
+      callbacks.onComplete(response, [], []);
+      return;
+    }
 
     // Handle Blocked Media Request (e.g. 3D / Hero video)
     if (isVideoOr3D) {
@@ -171,6 +234,22 @@ export class AgentEngine {
     };
     subagents.push(researchTask);
     callbacks.onSubagentProgress(researchTask);
+    emitActivity({ type: 'subagent', title: 'Researcher started', detail: researchTask.goal, status: 'running', subagentTaskId: researchTask.taskId });
+
+    if (/research|compare|audit|verify|analy[sz]e|benchmark|competitor|market|source|web/i.test(prompt)) {
+      try {
+        emitActivity({ type: 'tool_call', title: 'Searching the web', detail: 'Exa Neural Web Index · safe read-only search', status: 'running', toolName: 'exa_search', safeInput: { query: prompt.slice(0, 160), resultLimit: 5 } });
+        liveExaResults = await exaSearch(prompt, { numResults: 5, includeText: true });
+        if (liveExaResults.length > 0) {
+          researchTask.citations = liveExaResults.map((result) => result.url);
+          researchTask.outputPayload = { tool: 'exa_search', resultCount: liveExaResults.length, results: liveExaResults.map((result) => ({ title: result.title, url: result.url, highlights: result.highlights })) };
+          callbacks.onSubagentProgress(researchTask);
+          emitActivity({ type: 'tool_call', title: 'Web search completed', detail: `${liveExaResults.length} grounded result${liveExaResults.length === 1 ? '' : 's'} attached to the researcher.`, status: 'completed', toolName: 'exa_search', safeOutput: { resultCount: liveExaResults.length } });
+        }
+      } catch (error) {
+        console.warn('Exa search unavailable; continuing with project sources.', error);
+      }
+    }
 
     await this.delay(1200);
     researchTask.status = 'completed';
@@ -181,6 +260,7 @@ export class AgentEngine {
     researchTask.completedAt = new Date().toISOString();
     steps[0].status = 'completed';
     callbacks.onSubagentProgress(researchTask);
+    emitActivity({ type: 'subagent', title: 'Researcher completed', detail: researchTask.outputPayload?.summary, status: 'completed', subagentTaskId: researchTask.taskId });
 
     // Step 2: Execute Artifact Maker / Visual Director
     steps[1].status = 'running';
@@ -201,6 +281,8 @@ export class AgentEngine {
     };
     subagents.push(makerTask);
     callbacks.onSubagentProgress(makerTask);
+    emitActivity({ type: 'subagent', title: `${step2Role.replace('_', ' ')} started`, detail: makerTask.goal, status: 'running', subagentTaskId: makerTask.taskId });
+    if (isAgenticToolsResearch) emitActivity({ type: 'mcp_call', title: 'Inspecting remote MCP capabilities', detail: 'Remote-only connector discovery · no local process execution', status: 'completed', connectorName: 'Remote MCP registry', scope: 'tools.list · resources.read' });
 
     await this.delay(1500);
 
@@ -430,7 +512,9 @@ This document provides a grounded, multi-perspective synthesis based on verified
     }
 
     // Final Completion Callbacks
-    const citations: Citation[] = projectSources.map((s, i) => ({
+    const citations: Citation[] = liveExaResults.length > 0
+      ? liveExaResults.map((result, i) => ({ id: `cit_exa_${i + 1}`, sourceId: result.url, title: result.title, url: result.url, type: 'web_search', snippet: result.highlights?.[0] || result.text?.slice(0, 180) || 'Exa search result', relevanceScore: result.score || 0.9 }))
+      : projectSources.map((s, i) => ({
       id: 'cit_' + (i + 1),
       sourceId: s.id,
       title: s.name,
@@ -451,8 +535,22 @@ This document provides a grounded, multi-perspective synthesis based on verified
       });
     }
 
+    let finalSummary = `I have completed the multi-step run and generated the durable inline work product **${newArtifact.title}** below.`;
+    if (configuredProvider) {
+      try {
+        finalSummary = await runProviderChat(
+          configuredProvider,
+          configuredProvider.defaultModel || 'latest',
+          `User request: ${prompt}\n\nGenerated artifact title: ${newArtifact.title}\n\nProvide a grounded completion summary. Mention the artifact, the work completed, the sources used, and any limitations. Do not expose private chain-of-thought.`,
+          'You are the synthesis stage of an agentic assistant. Summarize completed work, tool results, citations, and limitations without revealing private chain-of-thought.'
+        );
+      } catch (error) {
+        console.warn('Provider synthesis unavailable; using local completion summary.', error);
+      }
+    }
+
     callbacks.onComplete(
-      `I have completed the multi-step run and generated the durable **${newArtifact.title}** artifact in the canvas.
+      finalSummary + `
 
 - **Orchestration Summary:** Planned and executed across 3 specialist subagents (Researcher, ${isDiagram ? 'Visual Director' : 'Artifact Maker'}, QA Reviewer).
 - **Source Verification:** Verified ${citations.length} grounded citation${citations.length > 1 ? 's' : ''}.

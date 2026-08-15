@@ -16,9 +16,10 @@ import { AgentDefinition, SpecialistRole } from '../types';
 interface AgentDirectoryProps {
   agents: AgentDefinition[];
   onSaveAgent: (agent: AgentDefinition) => void;
+  onDeleteAgent: (agentId: string) => void;
 }
 
-export function AgentDirectory({ agents, onSaveAgent }: AgentDirectoryProps) {
+export function AgentDirectory({ agents, onSaveAgent, onDeleteAgent }: AgentDirectoryProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -187,6 +188,13 @@ export function AgentDirectory({ agents, onSaveAgent }: AgentDirectoryProps) {
                   <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-stone-100 text-stone-700 uppercase font-semibold">
                     {agent.roleType}
                   </span>
+                  {agent.id !== 'agent_main_default' && <button
+                    onClick={() => onDeleteAgent(agent.id)}
+                    className="text-stone-500 hover:text-red-400"
+                    title="Delete agent"
+                  >
+                    <Trash2 size={15} />
+                  </button>}
                   <button
                     onClick={() => toggleAgent(agent)}
                     className="text-stone-500 hover:text-stone-900"
